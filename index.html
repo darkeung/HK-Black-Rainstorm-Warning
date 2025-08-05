@@ -1,0 +1,328 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">香港黑色暴雨警告系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        h1 {
+            color: #333;
+            margin-top: 60px;
+            font-size: 1.8em;
+            text-align: center;
+        }
+        #warning {
+            font-size: 1.2em;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            text-align: center;
+            width: 90%;
+            max-width: 600px;
+        }
+        .black {
+            background-color: #333;
+            color: #fff;
+        }
+        .none {
+            background-color: #fff;
+            color: #333;
+            border: 1px solid #ccc;
+        }
+        #update-time {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #555;
+            text-align: center;
+        }
+        .header-container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+        }
+        #current-time {
+            font-size: 0.9em;
+            color: #555;
+        }
+        .language-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .language-button {
+            padding: 8px 12px;
+            font-size: 0.9em;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #fff;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .language-button:hover {
+            background-color: #e0e0e0;
+        }
+        .language-button.active {
+            background-color: #007bff;
+            color: #fff;
+            border-color: #007bff;
+        }
+        .footer-container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            margin-top: auto;
+        }
+        #api-source a {
+            padding: 8px 12px;
+            font-size: 0.9em;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #fff;
+            color: #333;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        #api-source a:hover {
+            background-color: #e0e0e0;
+        }
+        #author {
+            font-size: 0.9em;
+            color: #555;
+        }
+        /* 小螢幕適應 */
+        @media screen and (max-width: 600px) {
+            h1 {
+                margin-top: 40px;
+                font-size: 1.4em;
+            }
+            #warning {
+                font-size: 1em;
+                padding: 15px;
+            }
+            #update-time {
+                font-size: 0.8em;
+            }
+            #current-time {
+                font-size: 0.8em;
+            }
+            .language-buttons {
+                flex-direction: column;
+                gap: 5px;
+            }
+            .language-button {
+                font-size: 0.8em;
+                padding: 6px 10px;
+            }
+            #api-source a {
+                font-size: 0.8em;
+                padding: 6px 10px;
+            }
+            #author {
+                font-size: 0.8em;
+            }
+            .header-container {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .footer-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <div id="current-time"></div>
+        <div class="language-buttons">
+            <button class="language-button active" data-lang="tc" onclick="changeLanguage('tc')">繁體中文</button>
+            <button class="language-button" data-lang="sc" onclick="changeLanguage('sc')">簡體中文</button>
+            <button class="language-button" data-lang="en" onclick="changeLanguage('en')">English</button>
+        </div>
+    </div>
+    <h1 id="page-header">香港黑色暴雨警告系統</h1>
+    <div id="warning" class="none">正在加載黑色暴雨警告資訊...</div>
+    <div id="update-time"></div>
+    <div class="footer-container">
+        <div id="api-source"></div>
+        <div id="author"></div>
+    </div>
+
+    <script>
+        // 語言翻譯表
+        const translations = {
+            tc: {
+                title: '香港黑色暴雨警告系統',
+                noWarning: '目前沒有黑色暴雨警告信號',
+                loading: '正在加載黑色暴雨警告資訊...',
+                updateTimeLabel: 'API更新時間: ',
+                noUpdate: 'API更新時間: 沒有更新',
+                timeSuffix: '(香港時間)',
+                currentTimeLabel: '當前時間: ',
+                apiSourceLabel: 'API資料來源',
+                authorLabel: '作者: DARKEUNG',
+                blackWarning: '黑色暴雨警告信號 (生效中)'
+            },
+            sc: {
+                title: '香港黑色暴雨警告系统',
+                noWarning: '目前没有黑色暴雨警告信号',
+                loading: '正在加载黑色暴雨警告信息...',
+                updateTimeLabel: 'API更新时间: ',
+                noUpdate: 'API更新时间: 没有更新',
+                timeSuffix: '(香港时间)',
+                currentTimeLabel: '当前时间: ',
+                apiSourceLabel: 'API资料来源',
+                authorLabel: '作者: DARKEUNG',
+                blackWarning: '黑色暴雨警告信号 (生效中)'
+            },
+            en: {
+                title: 'Hong Kong Black Rainstorm Warning System',
+                noWarning: 'No black rainstorm warning signal at the moment',
+                loading: 'Loading black rainstorm warning information...',
+                updateTimeLabel: 'API Update Time: ',
+                noUpdate: 'API Update Time: No update',
+                timeSuffix: '(Hong Kong Time)',
+                currentTimeLabel: 'Current Time: ',
+                apiSourceLabel: 'API Data Source',
+                authorLabel: 'Author: DARKEUNG',
+                blackWarning: 'Black Rainstorm Warning Signal (Active)'
+            }
+        };
+
+        let currentLang = 'tc'; // 預設語言為繁體中文
+
+        // 更新當前時間（每秒）
+        function updateCurrentTime() {
+            const date = new Date();
+            document.getElementById('current-time').textContent = `${translations[currentLang].currentTimeLabel}${date.toLocaleString(currentLang === 'en' ? 'en-HK' : 'zh-HK', { timeZone: 'Asia/Hong_Kong', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })} ${translations[currentLang].timeSuffix}`;
+        }
+
+        // 更新 API 資料來源和作者資訊
+        function updateStaticContent() {
+            document.getElementById('api-source').innerHTML = `<a href="https://www.hko.gov.hk/en/weatherAPI/doc/files/HKO_Open_Data_API_Documentation.pdf" target="_blank">${translations[currentLang].apiSourceLabel}</a>`;
+            document.getElementById('author').textContent = translations[currentLang].authorLabel;
+        }
+
+        async function fetchRainstormWarning() {
+            try {
+                const response = await fetch(`https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=${currentLang}`);
+                const data = await response.json();
+
+                const warningDiv = document.getElementById('warning');
+                const updateTimeDiv = document.getElementById('update-time');
+                let warningText = translations[currentLang].noWarning;
+                let warningClass = 'none';
+                let updateTimeText = `${translations[currentLang].noUpdate} ${translations[currentLang].timeSuffix}`;
+
+                if (data.WRAIN) {
+                    const code = data.WRAIN.code;
+                    const actionCode = data.WRAIN.actionCode || '';
+                    const updateTime = data.WRAIN.updateTime;
+
+                    if (actionCode.includes('ISSUE') || actionCode.includes('REISSUE')) {
+                        if (code === 'WRAINB') {
+                            warningText = translations[currentLang].blackWarning;
+                            warningClass = 'black';
+                        }
+                    }
+                    if (updateTime) {
+                        const date = new Date(updateTime);
+                        updateTimeText = `${translations[currentLang].updateTimeLabel}${date.toLocaleString(currentLang === 'en' ? 'en-HK' : 'zh-HK', { timeZone: 'Asia/Hong_Kong', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })} ${translations[currentLang].timeSuffix}`;
+                    }
+                }
+
+                warningDiv.textContent = warningText;
+                warningDiv.className = warningClass;
+                updateTimeDiv.textContent = updateTimeText;
+            } catch (error) {
+                console.error('獲取黑色暴雨警告失敗:', error);
+                document.getElementById('warning').textContent = translations[currentLang].loading;
+                document.getElementById('warning').className = 'none';
+                document.getElementById('update-time').textContent = `${translations[currentLang].noUpdate} ${translations[currentLang].timeSuffix}`;
+            }
+        }
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            document.getElementById('page-title').textContent = translations[currentLang].title;
+            document.getElementById('page-header').textContent = translations[currentLang].title;
+            document.getElementById('warning').textContent = translations[currentLang].loading;
+
+            // 更新按鈕的 active 狀態
+            document.querySelectorAll('.language-button').forEach(button => {
+                button.classList.toggle('active', button.getAttribute('data-lang') === lang);
+            });
+
+            // 更新當前時間、警告資訊、API 資料來源和作者資訊
+            updateCurrentTime();
+            fetchRainstormWarning();
+            updateStaticContent();
+        }
+
+        // 初次加載
+        fetchRainstormWarning();
+        updateCurrentTime();
+        updateStaticContent();
+
+        // 每分鐘更新警告
+        setInterval(fetchRainstormWarning, 60000);
+        // 每秒更新當前時間
+        setInterval(updateCurrentTime, 1000);
+    </script>
+</body>
+</html>
